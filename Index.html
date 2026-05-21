@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Coach Transcription</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: Arial, sans-serif; }
+    body { background: #f0f4f8; padding: 16px; }
+    .app { max-width: 620px; margin: 0 auto; background: #fff; border-radius: 14px; padding: 22px; box-shadow: 0 2px 12px rgba(0,0,0,0.1); }
+    .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+    .logo { font-size: 18px; font-weight: bold; color: #1a1a1a; }
+    .badge { font-size: 12px; padding: 4px 12px; border-radius: 99px; background: #e8f5e9; color: #2e7d32; font-weight: bold; }
+    .badge.recording { background: #ffebee; color: #c62828; }
+    .badge.saving { background: #e3f2fd; color: #1565c0; }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
+    .field label { display: block; font-size: 13px; color: #555; margin-bottom: 5px; font-weight: 500; }
+    input, select { width: 100%; padding: 9px 11px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; color: #333; }
+    .timer-display { display: inline-block; font-size: 24px; font-weight: bold; color: #1a73e8; padding-top: 2px; }
+    .mic-btn { width: 100%; padding: 14px; border-radius: 10px; border: 2px solid #1a73e8; background: #fff; color: #1a73e8; font-size: 16px; font-weight: bold; cursor: pointer; margin-bottom: 14px; transition: all 0.2s; }
+    .mic-btn.active { background: #ffebee; border-color: #c62828; color: #c62828; }
+    .transcript-box { background: #f9fafb; border: 1px solid #e0e0e0; border-radius: 10px; padding: 14px; min-height: 180px; font-size: 15px; line-height: 1.8; margin-bottom: 14px; max-height: 280px; overflow-y: auto; }
+    .placeholder { color: #bbb; font-size: 14px; }
+    .interim { color: #999; font-style: italic; }
+    .actions { display: flex; gap: 10px; margin-bottom: 16px; }
+    .btn-save { flex: 1; padding: 13px; border-radius: 8px; border: none; background: #1a73e8; color: #fff; font-size: 15px; font-weight: bold; cursor: pointer; }
+    .btn-save:hover { background: #1557b0; }
+    .btn-save:disabled { background: #90b8f0; cursor: not-allowed; }
+    .btn-clear { padding: 13px 18px; border-radius: 8px; border: 1px solid #ddd; background: #fff; color: #666; font-size: 14px; cursor: pointer; }
+    .summary-box { background: #f0f7ff; border: 1px solid #b3d4f5; border-radius: 10px; padding: 16px; margin-bottom: 12px; display: none; }
+    .summary-title { font-size: 15px; font-weight: bold; color: #1a73e8; margin-bottom: 12px; }
+    #summary-content { font-size: 14px; color: #333; line-height: 1.8; white-space: pre-wrap; }
+    .summary-footer { margin-top: 14px; padding-top: 10px; border-top: 1px solid #cce0f5; }
+    .summary-footer a { color: #1a73e8; font-size: 14px; font-weight: bold; text-decoration: none; }
+    .toast { margin-top: 10px; font-size: 13px; padding: 10px 14px; border-radius: 8px; display: none; }
+    .toast.success { background: #e8f5e9; color: #2e7d32; }
+    .toast.error { background: #ffebee; color: #c62828; }
+    .toast.info { background: #e3f2fd; color: #1565c0; }
+    @media (max-width: 480px) { .form-row { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+<div class="app">
+  <div class="header">
+    <span class="logo">🎙 Coach Transcription</span>
+    <span class="badge" id="status-badge">Ready</span>
+  </div>
+  <div class="form-row">
+    <div class="field">
+      <label>Coach Name</label>
+      <input type="text" id="coach-name" placeholder="Your name" />
+    </div>
+    <div class="field">
+      <label>Member Name</label>
+      <input type="text" id="member-name" placeholder="Member name" />
+    </div>
+  </div>
+  <div class="form-row">
+    <div class="field">
+      <label>Language</label>
+      <select id="lang-select">
+        <option value="en-IN">English</option>
+        <option value="te-IN">Telugu</option>
+        <option value="hi-IN">Hindi</option>
+        <option value="ta-IN">Tamil</option>
+        <option value="kn-IN">Kannada</option>
+        <option value="mr-IN">Marathi</option>
+        <option value="bn-IN">Bengali</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Duration</label>
+      <span class="timer-display" id="timer">00:00</span>
+    </div>
+  </div>
+  <button class="mic-btn" id="mic-btn" onclick="toggleMic()">🎤 Start Recording</button>
+  <div class="transcript-box">
+    <div id="placeholder" class="placeholder">Transcript will appear here as you speak...</div>
+    <div id="transcript-lines"></div>
+  </div>
+  <div class="actions">
+    <button class="btn-save" id="save-btn" onclick="saveSession()">✨ Save + AI Summary</button>
+    <button class="btn-clear" onclick="clearAll()">🗑 Clear</button>
+  </div>
+  <div class="summary-box" id="summary-box">
+    <div class="summary-title">✨ AI Summary</div>
+    <div id="summary-content"></div>
+    <div class="summary-footer">
+      <a id="doc-link" href="#" target="_blank">📄 Open Google Doc</a>
+    </div>
+  </div>
+  <div id="toast" class="toast"></div>
+</div>
+
+<script>
+  const APPS_SCRIPT_URL = 'https://script.google.com/a/macros/pbhealth.com/s/AKfycbx86Vu88pYvmPdkxA1Cl0nGojMUaPOWzX7vj2h2KMOE3FYb_GQzdD0-V3AqXvVVzQhweA/exec'; // ← paste your /exec URL here
+
+  let recognition = null, isRecording = false;
+  let timerInterval = null, seconds = 0;
+  let fullTranscript = [];
+
+  function toggleMic() {
+    if (!isRecording) startRecording(); else stopRecording();
+  }
+
+  function startRecording() {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) { showToast('Please use Chrome browser.', 'error'); return; }
+    recognition = new SR();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = document.getElementById('lang-select').value;
+    recognition.onresult = (e) => {
+      let interim = '';
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const t = e.results[i][0].transcript;
+        if (e.results[i].isFinal) fullTranscript.push(t.trim());
+        else interim += t;
+      }
+      document.getElementById('placeholder').style.display = 'none';
+      document.getElementById('transcript-lines').innerHTML =
+        fullTranscript.join('<br>') +
+        (interim ? '<br><span class="interim">' + interim + '...</span>' : '');
+    };
+    recognition.onend = () => { if (isRecording) recognition.start(); };
+    recognition.onerror = (e) => { if (e.error !== 'no-speech') showToast('Mic error: ' + e.error, 'error'); };
+    recognition.start();
+    isRecording = true;
+    seconds = 0;
+    timerInterval = setInterval(() => {
+      seconds++;
+      document.getElementById('timer').textContent =
+        String(Math.floor(seconds/60)).padStart(2,'0') + ':' + String(seconds%60).padStart(2,'0');
+    }, 1000);
+    document.getElementById('mic-btn').textContent = '⏹ Stop Recording';
+    document.getElementById('mic-btn').classList.add('active');
+    document.getElementById('status-badge').textContent = '● Recording';
+    document.getElementById('status-badge').className = 'badge recording';
+  }
+
+  function stopRecording() {
+    if (recognition) { recognition.onend = null; recognition.stop(); }
+    isRecording = false;
+    clearInterval(timerInterval);
+    document.getElementById('mic-btn').textContent = '🎤 Start Recording';
+    document.getElementById('mic-btn').classList.remove('active');
+    document.getElementById('status-badge').textContent = 'Stopped';
+    document.getElementById('status-badge').className = 'badge';
+  }
+
+  function getLangLabel() {
+    const sel = document.getElementById('lang-select');
+    return sel.options[sel.selectedIndex].text;
+  }
+
+  function getDuration() {
+    return String(Math.floor(seconds/60)).padStart(2,'0') + ':' + String(seconds%60).padStart(2,'0');
+  }
+
+  async function saveSession() {
+    const coach = document.getElementById('coach-name').value.trim();
+    const member = document.getElementById('member-name').value.trim();
+    if (!coach || !member) { showToast('Please enter coach and member names.', 'error'); return; }
+    if (fullTranscript.length === 0) { showToast('No transcript to save yet.', 'error'); return; }
+
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' });
+    const timeStr = now.toLocaleTimeString('en-IN', { hour:'2-digit', minute:'2-digit' });
+
+    const data = {
+      coachName: coach,
+      memberName: member,
+      date: dateStr,
+      datetime: dateStr + ' ' + timeStr,
+      language: getLangLabel(),
+      duration: getDuration(),
+      transcript: fullTranscript.join('\n')
+    };
+
+    const btn = document.getElementById('save-btn');
+    btn.textContent = '⏳ Generating AI Summary...';
+    btn.disabled = true;
+    document.getElementById('status-badge').textContent = 'Saving...';
+    document.getElementById('status-badge').className = 'badge saving';
+    showToast('Generating AI summary and saving... please wait.', 'info');
+
+    try {
+      const response = await fetch(APPS_SCRIPT_URL, {
+        method: 'POST',
+        body: JSON.stringify(data)
+      });
+      const result = await response.json();
+      btn.textContent = '✨ Save + AI Summary';
+      btn.disabled = false;
+      if (result.success) {
+        document.getElementById('summary-content').textContent = result.summary;
+        document.getElementById('doc-link').href = result.docUrl;
+        document.getElementById('summary-box').style.display = 'block';
+        document.getElementById('status-badge').textContent = 'Saved ✓';
+        document.getElementById('status-badge').className = 'badge';
+        showToast('✅ Saved to Google Doc & Sheet!', 'success');
+      } else {
+        showToast('Error: ' + result.error, 'error');
+      }
+    } catch (err) {
+      btn.textContent = '✨ Save + AI Summary';
+      btn.disabled = false;
+      showToast('Failed to save: ' + err.message, 'error');
+    }
+  }
+
+  function clearAll() {
+    if (isRecording) stopRecording();
+    fullTranscript = [];
+    seconds = 0;
+    document.getElementById('transcript-lines').innerHTML = '';
+    document.getElementById('placeholder').style.display = 'block';
+    document.getElementById('timer').textContent = '00:00';
+    document.getElementById('summary-box').style.display = 'none';
+    document.getElementById('status-badge').textContent = 'Ready';
+    document.getElementById('status-badge').className = 'badge';
+  }
+
+  function showToast(msg, type) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'toast ' + type;
+    t.style.display = 'block';
+    setTimeout(() => { t.style.display = 'none'; }, 5000);
+  }
+</script>
+</body>
+</html>
